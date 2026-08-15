@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <script>
+      (function() {
+        try {
+          var origFetch = window.fetch;
+          var currentFetch = origFetch;
+          Object.defineProperty(window, 'fetch', {
+            get: function() {
+              return currentFetch;
+            },
+            set: function(val) {
+              currentFetch = val;
+            },
+            configurable: true,
+            enumerable: true
+          });
+        } catch (e) {
+          // Fallback if property is non-configurable
+        }
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CN VTĐS NHA TRANG - Đặt Vé Tàu Hỏa Điện Tử</title>
+    <meta name="description" content="Hệ thống đặt vé tàu hỏa điện tử trực tuyến Chi nhánh Vận tải Đường sắt Nha Trang." />
+    <meta property="og:title" content="CN VTĐS NHA TRANG - Đặt Vé Tàu Hỏa Điện Tử" />
+    <meta property="og:description" content="Hệ thống đặt vé tàu hỏa điện tử trực tuyến Chi nhánh Vận tải Đường sắt Nha Trang." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

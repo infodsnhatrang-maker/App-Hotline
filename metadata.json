@@ -1,0 +1,6 @@
+{
+  "name": "ĐẶT VÉ TÀU ĐIỆN TỬ & QUẢN LÝ BÁN VÉ",
+  "description": "Hệ thống đặt vé tàu hỏa trực tuyến, xuất vé điện tử, thanh toán, gửi email xác nhận, nhắc nhở chuyến tàu và quản trị xử lý bán vé qua điện thoại.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
