@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Booking, SEAT_CLASS_LABELS } from '../types';
-import { Search, Train, Calendar, User, Phone, Mail, Clock, Ticket, Bell, FileText, ChevronRight, ChevronLeft, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Search, Train, Calendar, User, Phone, Mail, Clock, Ticket, Bell, FileText, ChevronRight, ChevronLeft, CheckCircle2, AlertCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import { ETicketView } from './ETicketView';
 
 interface MyBookingsViewProps {
@@ -12,45 +12,83 @@ export const MyBookingsView: React.FC<MyBookingsViewProps> = ({
   initialSearchPnr = '',
   onOpenEmailPreview
 }) => {
-  const [query, setQuery] = useState(initialSearchPnr);
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+
+  // Captcha security state
+  const [captchaCode, setCaptchaCode] = useState(() => Math.floor(10000 + Math.random() * 90000).toString());
+  const [captchaTargetIndex, setCaptchaTargetIndex] = useState(() => Math.floor(Math.random() * 5) + 1);
+  const [captchaInput, setCaptchaInput] = useState('');
+  const [captchaError, setCaptchaError] = useState('');
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(5);
 
-  // Reset page when search query changes
+  // Reset page when search criteria change
   useEffect(() => {
     setCurrentPage(1);
-  }, [query]);
+  }, [phone, email]);
 
-  const fetchBookings = async (searchQuery: string) => {
+  const handleRefreshCaptcha = () => {
+    setCaptchaCode(Math.floor(10000 + Math.random() * 90000).toString());
+    setCaptchaTargetIndex(Math.floor(Math.random() * 5) + 1);
+    setCaptchaInput('');
+    setCaptchaError('');
+  };
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const searchPhone = phone.trim();
+    const searchEmail = email.trim();
+
+    if (!searchPhone && !searchEmail) {
+      alert('Vui lòng nhập Số điện thoại hoặc Email để tìm vé!');
+      return;
+    }
+
+    // Capture user input and match with specific digit of captcha code
+    const correctDigit = captchaCode[captchaTargetIndex - 1];
+    if (captchaInput.trim() !== correctDigit) {
+      setCaptchaError(`Xác thực sai! Hãy nhập chính xác chữ số thứ ${captchaTargetIndex} của mã ${captchaCode}.`);
+      handleRefreshCaptcha();
+      return;
+    }
+
+    setCaptchaError('');
     setLoading(true);
+    setHasSearched(true);
+    
     try {
-      const url = searchQuery
-        ? `/api/bookings?query=${encodeURIComponent(searchQuery)}`
-        : '/api/bookings';
-      const res = await fetch(url);
+      const res = await fetch('/api/bookings');
       const data = await res.json();
       if (Array.isArray(data)) {
-        setBookings(data);
+        // Filter bookings by exact/partial match on phone or email
+        const filtered = data.filter(b => {
+          const matchPhone = searchPhone ? b.contact.phone.includes(searchPhone) : true;
+          const matchEmail = searchEmail ? b.contact.email.toLowerCase().includes(searchEmail.toLowerCase()) : true;
+          
+          if (searchPhone && searchEmail) {
+            return b.contact.phone.includes(searchPhone) && b.contact.email.toLowerCase().includes(searchEmail.toLowerCase());
+          } else if (searchPhone) {
+            return b.contact.phone.includes(searchPhone);
+          } else if (searchEmail) {
+            return b.contact.email.toLowerCase().includes(searchEmail.toLowerCase());
+          }
+          return false;
+        });
+        setBookings(filtered);
       }
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchBookings(query);
-  }, []);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchBookings(query);
   };
 
   const getStatusBadge = (status: Booking['status']) => {
@@ -95,36 +133,102 @@ export const MyBookingsView: React.FC<MyBookingsViewProps> = ({
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Search Bar Header */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
           <div>
-            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <Ticket className="w-6 h-6 text-red-600" />
-              <span>Tài Khoản Cá Nhân & Lịch Sử Đặt Vé Tàu</span>
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
+              <Ticket className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 flex-shrink-0" />
+              <span>Tìm kiếm Đơn đặt vé tàu</span>
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Tra cứu thông tin vé điện tử, trạng thái nhân viên tìm vé, hoặc tải lại vé theo mã PNR, số điện thoại, email.
+            <p className="text-xs text-slate-500 mt-1">
+              Tra cứu thông tin vé điện tử, trạng thái nhân viên tìm vé, hoặc tải lại vé theo Số điện thoại và Email người đặt đơn.
             </p>
           </div>
         </div>
 
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-            <input
-              type="text"
-              placeholder="Nhập Mã PNR hoặc Số Điện Thoại / Email..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
-            />
+        <form onSubmit={handleSearch} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Input 1: Số điện thoại */}
+            <div className="relative">
+              <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+              <input
+                type="tel"
+                placeholder="Nhập số điện thoại người đặt..."
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+              />
+            </div>
+            {/* Input 2: Email */}
+            <div className="relative">
+              <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+              <input
+                type="email"
+                placeholder="Nhập email người đặt đơn..."
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+              />
+            </div>
           </div>
-          <button
-            type="submit"
-            className="bg-red-600 hover:bg-red-700 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-colors shadow-sm"
-          >
-            Tìm vé
-          </button>
+
+          {/* Captcha Verification */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
+              {/* Captcha code display and refresh button */}
+              <div className="flex items-center gap-2 justify-between sm:justify-start">
+                <div className="bg-red-50 text-red-600 px-3.5 py-2 rounded-xl font-bold tracking-widest text-lg select-none border border-red-100 flex items-center gap-1.5 shadow-sm">
+                  <ShieldCheck className="w-5 h-5 text-red-500" />
+                  <span>{captchaCode}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRefreshCaptcha}
+                  title="Đổi mã bảo vệ khác"
+                  className="p-2.5 text-slate-500 hover:text-slate-700 bg-white hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors cursor-pointer shadow-sm flex-shrink-0"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+              {/* Text instruction */}
+              <div className="text-xs text-slate-600 leading-relaxed">
+                Mã bảo vệ ngẫu nhiên: <span className="font-bold text-slate-800">{captchaCode}</span>.<br />
+                Vui lòng nhập <span className="font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">chữ số thứ {captchaTargetIndex}</span> của mã trên vào ô:
+              </div>
+            </div>
+            
+            {/* Input field */}
+            <div className="w-full md:w-32">
+              <input
+                type="text"
+                maxLength={1}
+                placeholder="Số cần nhập..."
+                value={captchaInput}
+                onChange={(e) => {
+                  setCaptchaInput(e.target.value.replace(/\D/g, ''));
+                  setCaptchaError('');
+                }}
+                className="w-full text-center px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-lg font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 shadow-inner placeholder:text-slate-400 placeholder:text-sm"
+              />
+            </div>
+          </div>
+
+          {captchaError && (
+            <p className="text-xs font-semibold text-red-600 flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" />
+              {captchaError}
+            </p>
+          )}
+          
+          <div className="flex justify-end pt-1">
+            <button
+              type="submit"
+              className="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white font-semibold px-8 py-2.5 rounded-xl text-sm transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-2"
+            >
+              <Search className="w-4 h-4" />
+              <span>Tìm vé</span>
+            </button>
+          </div>
         </form>
       </div>
 
@@ -132,6 +236,16 @@ export const MyBookingsView: React.FC<MyBookingsViewProps> = ({
       <div className="space-y-4">
         {loading ? (
           <div className="text-center py-12 text-slate-500 text-sm">Đang tải lịch sử vé...</div>
+        ) : !hasSearched ? (
+          <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 space-y-3">
+            <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto text-blue-600">
+              <Search className="w-6 h-6" />
+            </div>
+            <p className="font-bold text-slate-700 text-base">Vui lòng nhập thông tin để tìm kiếm vé</p>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              Nhập Số điện thoại hoặc Email người đặt bên trên để hiển thị chi tiết lịch trình và vé điện tử của bạn.
+            </p>
+          </div>
         ) : bookings.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 space-y-3">
             <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">

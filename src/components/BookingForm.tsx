@@ -79,12 +79,28 @@ export const BookingForm: React.FC<BookingFormProps> = ({ onSubmitBooking, isSub
   const [emailTouched, setEmailTouched] = useState(false);
   const [nameTouched, setNameTouched] = useState(false);
 
-  // Reset Contact Information when request is successful and "Đặt Tiếp" is clicked
+  // Reset all state variables when request is successful and "Đặt Tiếp" is clicked
   useEffect(() => {
     if (resetContactTrigger && resetContactTrigger > 0) {
+      setTripType('one_way');
+      setOrigin('Hà Nội');
+      setDestination('Sài Gòn');
+      
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 3);
+      setDepartureDate(tomorrow.toISOString().split('T')[0]);
+      
+      const returnD = new Date();
+      returnD.setDate(returnD.getDate() + 7);
+      setReturnDate(returnD.toISOString().split('T')[0]);
+      
+      setSeatClass('soft_sleeper');
+      setAdultCount(1);
+      setChildCount(0);
       setContactName('');
       setContactPhone('');
       setContactEmail('');
+      setRequestStaffSearch(false);
       setNameTouched(false);
       setPhoneTouched(false);
       setEmailTouched(false);
