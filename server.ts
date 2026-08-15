@@ -147,11 +147,90 @@ const USERS_DB = [
   }
 ];
 
+let activeUsersDB = [...USERS_DB];
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
   app.use(express.json());
+
+  const syncUsersFromGoogleSheet = async (): Promise<{ success: boolean; count: number; error?: string }> => {
+    try {
+      const sheetId = '1K2sxxYYK5ltBbWc6lXNIXBVkLxGjvIC_VRmzsyY7C0U';
+      const res = await fetch(`https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=514187060`);
+      if (!res.ok) {
+        throw new Error('Không thể tải danh sách tài khoản từ Google Sheet');
+      }
+      const csvText = await res.text();
+      const parseCsvLines = (text: string) => {
+        return text.split('\n')
+          .map(l => l.trim())
+          .filter(l => l.length > 0)
+          .map(l => l.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(p => p.replace(/^"|"$/g, '').trim()));
+      };
+      const lines = parseCsvLines(csvText);
+      if (lines.length <= 1) {
+        return { success: false, count: 0, error: 'Bảng tài khoản trống' };
+      }
+
+      const newUsers: typeof USERS_DB = [];
+      for (let i = 1; i < lines.length; i++) {
+        const row = lines[i];
+        if (row.length < 3) continue;
+        const noVal = Number(row[0]) || i;
+        const userVal = row[1] || '';
+        const passVal = row[2] || '';
+        const nameVal = row[3] || '';
+        const yobVal = row[4] || '';
+        const titleVal = row[5] || '';
+
+        if (!userVal) continue;
+
+        let role = 'staff';
+        const lowerUser = userVal.toLowerCase();
+        const lowerTitle = titleVal.toLowerCase();
+        if (
+          lowerUser === 'admin' || 
+          lowerUser === 'infodsnhatrang' || 
+          lowerTitle.includes('quản trị') || 
+          lowerTitle.includes('admin') || 
+          lowerTitle.includes('giám đốc') || 
+          lowerTitle.includes('tp.') || 
+          lowerTitle.includes('trưởng phòng')
+        ) {
+          role = 'admin';
+        }
+
+        newUsers.push({
+          no: noVal,
+          id: 'USR-' + String(noVal).padStart(3, '0'),
+          username: userVal,
+          user: userVal,
+          password: passVal,
+          Password: passVal,
+          fullName: nameVal || userVal,
+          hoten: nameVal || userVal,
+          namsinh: yobVal,
+          chucvu: titleVal,
+          role: role,
+          phone: '',
+          email: '',
+          branch: titleVal || 'Phòng ban Chi nhánh'
+        });
+      }
+
+      if (newUsers.length > 0) {
+        activeUsersDB = [...newUsers];
+        console.log(`Successfully synced ${activeUsersDB.length} staff/admin accounts from Sheet 514187060!`);
+        return { success: true, count: activeUsersDB.length };
+      }
+      return { success: false, count: 0, error: 'Không tìm thấy tài khoản hợp lệ' };
+    } catch (e: any) {
+      console.error('Failed to sync users from Google Sheet:', e.message);
+      return { success: false, count: 0, error: e.message };
+    }
+  };
 
   const syncBookingsFromGoogleSheet = async (): Promise<{ success: boolean; count: number; error?: string }> => {
     try {
@@ -319,6 +398,10 @@ async function startServer() {
   // Run sheet sync on startup to get actual real-time data
   await syncBookingsFromGoogleSheet().catch(err => {
     console.error('Error in startup sheet sync:', err);
+  });
+
+  await syncUsersFromGoogleSheet().catch(err => {
+    console.error('Error in startup user accounts sync:', err);
   });
 
   // --- API ROUTES ---
@@ -1055,7 +1138,7 @@ async function startServer() {
 
     if (type === 'USER' || type === 'User') {
       csvContent += '# no,user,Password,hoten,namsinh,chucvu\n';
-      USERS_DB.forEach(u => {
+      activeUsersDB.forEach(u => {
         const row = [
           u.no,
           `"${u.user || u.username}"`,
@@ -1075,16 +1158,19 @@ async function startServer() {
   });
 
   // 11. Authentication API (Theo danh sách sheet User - Sheet ID: 514187060)
-  app.post('/api/auth/login', (req, res) => {
+  app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) {
       return res.status(400).json({ error: 'Vui lòng nhập tên đăng nhập (user) và mật khẩu (Password)' });
     }
 
+    // Dynamic sync before auth check
+    await syncUsersFromGoogleSheet().catch(() => {});
+
     const trimmedUser = username.trim().toLowerCase();
     const trimmedPass = password.trim();
 
-    const u = USERS_DB.find(
+    const u = activeUsersDB.find(
       user => (user.username && user.username.toLowerCase() === trimmedUser) ||
               (user.user && user.user.toLowerCase() === trimmedUser) ||
               (user.id && user.id.toLowerCase() === trimmedUser) ||
@@ -1111,8 +1197,9 @@ async function startServer() {
     });
   });
 
-  app.get('/api/auth/users', (_req, res) => {
-    const safeUsers = USERS_DB.map(({ password, ...u }) => u);
+  app.get('/api/auth/users', async (_req, res) => {
+    await syncUsersFromGoogleSheet().catch(() => {});
+    const safeUsers = activeUsersDB.map(({ password, Password, ...u }) => u);
     res.json(safeUsers);
   });
 

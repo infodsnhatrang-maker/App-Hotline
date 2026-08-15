@@ -63,6 +63,11 @@ export const StaffAdminPortal: React.FC<StaffAdminPortalProps> = ({
     }
   }, [currentUser]);
 
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterStatus, searchQuery]);
+
   // If user is not logged in, render the secure Login Screen
   if (!currentUser) {
     return <AdminLogin onLoginSuccess={onLogin} />;
@@ -152,11 +157,6 @@ export const StaffAdminPortal: React.FC<StaffAdminPortalProps> = ({
     }
     return true; // 'all'
   });
-
-  // Reset page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filterStatus, searchQuery]);
 
   const totalItems = filteredBookings.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
